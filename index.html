@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tìm đường Phường Tương Mai (Ngẫu nhiên)</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header {
+            padding: 10px 20px;
+            background: #f8f8f8;
+            border-bottom: 1px solid #ddd;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header h2 { margin: 0; color: #333; }
+        .controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        .controls button {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #007aff;
+            color: white;
+        }
+        .controls button#clearBtn { background: #6c757d; }
+        .controls button:hover { opacity: 0.8; }
+        #status { margin: 0; color: #555; font-weight: 500; }
+        #map { flex-grow: 1; background: #eee; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>Bản đồ Phường Tương Mai</h2>
+        <div class="controls">
+            <button id="findRandomPathBtn">Tìm đường ngẫu nhiên</button>
+            <button id="clearBtn">Làm mới</button>
+            <p id="status">Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.</p>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // === KHỞI TẠO ===
+        const mapCenter = [20.985, 105.855]; // Tọa độ gần Phường Tương Mai
+        const map = L.map('map').setView(mapCenter, 16);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Lấy các phần tử UI
+        const statusEl = document.getElementById('status');
+        const findRandomPathBtn = document.getElementById('findRandomPathBtn'); // Lấy nút mới
+        const clearBtn = document.getElementById('clearBtn');
+
+        // Biến để lưu trạng thái
+        let startMarker = null;
+        let endMarker = null;
+        let pathLayer = null; // Lớp chứa đường đi màu xanh
+
+        // === XỬ LÝ SỰ KIỆN ===
+
+        // 1. (ĐÃ XÓA) Bỏ logic 'map.on('click')'
+        // Người dùng không cần nhấp vào bản đồ nữa
+
+        // 2. Khi người dùng nhấp nút "Làm mới"
+        clearBtn.addEventListener('click', function() {
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (pathLayer) map.removeLayer(pathLayer);
+
+            pathLayer = null;
+            startMarker = null;
+            endMarker = null;
+
+            statusEl.innerHTML = 'Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.';
+            map.setView(mapCenter, 16); // Quay về vị trí ban đầu
+        });
+
+        // 3. Khi người dùng nhấp nút "Tìm đường ngẫu nhiên" (LOGIC MỚI)
+        findRandomPathBtn.addEventListener('click', async function() {
+            // Xóa đường đi cũ (nếu có)
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (pathLayer) map.removeLayer(pathLayer);
+
+            statusEl.textContent = 'Đang tìm đường ngẫu nhiên, vui lòng chờ...';
+
+            try {
+                // Gọi API backend mới (dùng GET, không cần gửi 'body')
+                const response = await fetch('http://localhost:5000/api/random-junction-path');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Backend trả về mảng tọa độ [lat, lng]
+                    pathLayer = L.polyline(data.path, { 
+                        color: 'blue', 
+                        weight: 5,
+                        opacity: 0.8
+                    }).addTo(map);
+                    
+                    // Vẽ marker cho điểm đầu và cuối
+                    startMarker = L.marker(data.start_point).addTo(map).bindPopup('<b>Điểm bắt đầu</b>').openPopup();
+                    endMarker = L.marker(data.end_point).addTo(map).bindPopup('<b>Điểm kết thúc</b>');
+
+                    // Phóng to bản đồ để vừa với đường đi
+                    map.fitBounds(pathLayer.getBounds());
+                    statusEl.textContent = 'Đã tìm thấy đường đi!';
+                } else {
+                    // Xử lý lỗi từ backend
+                    statusEl.textContent = `Lỗi: ${data.message}`;
+                }
+
+            } catch (error) {
+                // Xử lý lỗi (ví dụ: backend chưa chạy)
+                console.error('Lỗi khi gọi API:', error);
+                statusEl.textContent = 'Lỗi kết nối! (Bạn đã chạy file "app.py" chưa?)';
+            }
+        });
+
+    </script>
+</body>
+</html>
