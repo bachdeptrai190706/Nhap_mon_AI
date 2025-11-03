@@ -23,7 +23,13 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .header h2 { margin: 0; color: #333; }
-        .controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+        .controls { 
+            display: flex; 
+            gap: 12px; /* (CẬP NHẬT) Tăng gap một chút */
+            align-items: center; 
+            margin-top: 10px;
+            flex-wrap: wrap; /* Cho phép xuống dòng trên màn hình nhỏ */
+        }
         .controls button {
             padding: 8px 12px;
             font-size: 14px;
@@ -37,6 +43,27 @@
         .controls button:hover { opacity: 0.8; }
         #status { margin: 0; color: #555; font-weight: 500; }
         #map { flex-grow: 1; background: #eee; }
+
+        /* === (MỚI) CSS CHO NÚT TOGGLE === */
+        .toggle-control {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #e9ecef;
+            padding: 6px 10px;
+            border-radius: 5px;
+        }
+        .toggle-control label {
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            user-select: none; /* Không cho phép bôi đen chữ */
+        }
+        .toggle-control input {
+            cursor: pointer;
+        }
+        /* === HẾT PHẦN MỚI === */
+
     </style>
 </head>
 <body>
@@ -46,6 +73,12 @@
         <div class="controls">
             <button id="findRandomPathBtn">Tìm đường ngẫu nhiên</button>
             <button id="clearBtn">Làm mới</button>
+            
+            <div class="toggle-control">
+                <input type="checkbox" id="toggleNodesCheck">
+                <label for="toggleNodesCheck">Hiện tất cả Nodes</label>
+            </div>
+            
             <p id="status">Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.</p>
         </div>
     </div>
@@ -63,20 +96,24 @@
 
         // Lấy các phần tử UI
         const statusEl = document.getElementById('status');
-        const findRandomPathBtn = document.getElementById('findRandomPathBtn'); // Lấy nút mới
+        const findRandomPathBtn = document.getElementById('findRandomPathBtn');
         const clearBtn = document.getElementById('clearBtn');
+        const toggleNodesCheck = document.getElementById('toggleNodesCheck'); // (MỚI) Lấy checkbox
 
         // Biến để lưu trạng thái
         let startMarker = null;
         let endMarker = null;
         let pathLayer = null; // Lớp chứa đường đi màu xanh
 
+        // === (MỚI) Biến cho chức năng hiện node ===
+        let allNodesLayer = L.layerGroup(); // Layer group để chứa TẤT CẢ các node
+        let nodesLoaded = false; // Cờ theo dõi xem đã tải node chưa
+        // === HẾT PHẦN MỚI ===
+
+
         // === XỬ LÝ SỰ KIỆN ===
 
-        // 1. (ĐÃ XÓA) Bỏ logic 'map.on('click')'
-        // Người dùng không cần nhấp vào bản đồ nữa
-
-        // 2. Khi người dùng nhấp nút "Làm mới"
+        // 1. Khi người dùng nhấp nút "Làm mới" (CẬP NHẬT)
         clearBtn.addEventListener('click', function() {
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
@@ -85,12 +122,78 @@
             pathLayer = null;
             startMarker = null;
             endMarker = null;
+            
+            // (MỚI) Cũng xóa các node nếu đang hiển thị
+            if (nodesLoaded) {
+                map.removeLayer(allNodesLayer);
+            }
+            toggleNodesCheck.checked = false; // Bỏ check
+            // (HẾT PHẦN MỚI)
 
             statusEl.innerHTML = 'Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.';
             map.setView(mapCenter, 16); // Quay về vị trí ban đầu
         });
 
-        // 3. Khi người dùng nhấp nút "Tìm đường ngẫu nhiên" (LOGIC MỚI)
+
+        // 2. (MỚI) Khi người dùng bật/tắt checkbox "Hiện tất cả Nodes"
+        toggleNodesCheck.addEventListener('change', async function() {
+            if (this.checked) {
+                // Nếu BẬT
+                if (!nodesLoaded) {
+                    // Nếu chưa tải, thì tải lần đầu
+                    await loadAllNodes(); 
+                } else {
+                    // Nếu đã tải rồi, chỉ cần thêm lại vào map
+                    allNodesLayer.addTo(map);
+                    statusEl.textContent = 'Đã hiển thị tất cả nodes.';
+                }
+            } else {
+                // Nếu TẮT
+                if (nodesLoaded) {
+                    map.removeLayer(allNodesLayer); // Xóa layer group khỏi map
+                    statusEl.textContent = 'Đã ẩn tất cả nodes.';
+                }
+            }
+        });
+
+        // 3. (MỚI) Hàm để tải và vẽ tất cả các node
+        async function loadAllNodes() {
+            statusEl.textContent = 'Đang tải tất cả nodes...';
+            try {
+                // (MỚI) Gọi API mới
+                const response = await fetch('http://localhost:5000/api/all-nodes');
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // Lặp qua từng tọa độ node và tạo 1 marker hình tròn nhỏ
+                    data.nodes.forEach(coord => {
+                        const nodeMarker = L.circleMarker(coord, {
+                            radius: 3,
+                            color: '#e63946', // Màu đỏ
+                            fillColor: '#e63946',
+                            fillOpacity: 0.8,
+                            weight: 1
+                        });
+                        // Thêm marker vào layer group
+                        allNodesLayer.addLayer(nodeMarker);
+                    });
+                    
+                    // Thêm layer group (chứa tất cả marker) vào bản đồ
+                    allNodesLayer.addTo(map);
+                    nodesLoaded = true; // Đánh dấu là đã tải xong
+                    statusEl.textContent = 'Đã hiển thị tất cả nodes.';
+                } else {
+                    statusEl.textContent = `Lỗi: ${data.message}`;
+                    toggleNodesCheck.checked = false; // Bỏ check nếu lỗi
+                }
+            } catch (error) {
+                console.error('Lỗi khi tải nodes:', error);
+                statusEl.textContent = 'Lỗi kết nối khi tải nodes!';
+                toggleNodesCheck.checked = false; // Bỏ check nếu lỗi
+            }
+        }
+
+        // 4. Khi người dùng nhấp nút "Tìm đường ngẫu nhiên" (LOGIC CŨ)
         findRandomPathBtn.addEventListener('click', async function() {
             // Xóa đường đi cũ (nếu có)
             if (startMarker) map.removeLayer(startMarker);
@@ -100,32 +203,27 @@
             statusEl.textContent = 'Đang tìm đường ngẫu nhiên, vui lòng chờ...';
 
             try {
-                // Gọi API backend mới (dùng GET, không cần gửi 'body')
+                // Gọi API backend (dùng GET, không cần gửi 'body')
                 const response = await fetch('http://localhost:5000/api/random-junction-path');
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    // Backend trả về mảng tọa độ [lat, lng]
                     pathLayer = L.polyline(data.path, { 
                         color: 'blue', 
                         weight: 5,
                         opacity: 0.8
                     }).addTo(map);
                     
-                    // Vẽ marker cho điểm đầu và cuối
                     startMarker = L.marker(data.start_point).addTo(map).bindPopup('<b>Điểm bắt đầu</b>').openPopup();
                     endMarker = L.marker(data.end_point).addTo(map).bindPopup('<b>Điểm kết thúc</b>');
 
-                    // Phóng to bản đồ để vừa với đường đi
                     map.fitBounds(pathLayer.getBounds());
                     statusEl.textContent = 'Đã tìm thấy đường đi!';
                 } else {
-                    // Xử lý lỗi từ backend
                     statusEl.textContent = `Lỗi: ${data.message}`;
                 }
 
             } catch (error) {
-                // Xử lý lỗi (ví dụ: backend chưa chạy)
                 console.error('Lỗi khi gọi API:', error);
                 statusEl.textContent = 'Lỗi kết nối! (Bạn đã chạy file "app.py" chưa?)';
             }
