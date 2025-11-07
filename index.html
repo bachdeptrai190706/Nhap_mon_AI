@@ -44,6 +44,7 @@
         #status { margin: 0; color: #555; font-weight: 500; }
         #map { flex-grow: 1; background: #eee; }
 
+        
         .toggle-control {
             display: flex;
             align-items: center;
@@ -84,6 +85,7 @@
     <div id="map"></div>
 
     <script>
+       
         const mapCenter = [20.985, 105.855];
         const map = L.map('map').setView(mapCenter, 16);
 
@@ -91,18 +93,23 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
+        
         const statusEl = document.getElementById('status');
         const findRandomPathBtn = document.getElementById('findRandomPathBtn');
         const clearBtn = document.getElementById('clearBtn');
-        const toggleNodesCheck = document.getElementById('toggleNodesCheck');
+        const toggleNodesCheck = document.getElementById('toggleNodesCheck'); 
 
+        
         let startMarker = null;
         let endMarker = null;
-        let pathLayer = null;
+        let pathLayer = null; // Lớp chứa đường đi màu xanh
 
-        let allNodesLayer = L.layerGroup();
-        let nodesLoaded = false;
+        
+        let allNodesLayer = L.layerGroup(); // Layer group để chứa TẤT CẢ các node
+        let nodesLoaded = false; 
+        
 
+        
         clearBtn.addEventListener('click', function() {
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
@@ -112,21 +119,24 @@
             startMarker = null;
             endMarker = null;
             
+            
             if (nodesLoaded) {
                 map.removeLayer(allNodesLayer);
             }
-            toggleNodesCheck.checked = false;
+            toggleNodesCheck.checked = false; 
+            
 
             statusEl.innerHTML = 'Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.';
-            map.setView(mapCenter, 16);
+            map.setView(mapCenter, 16); 
         });
 
 
         toggleNodesCheck.addEventListener('change', async function() {
             if (this.checked) {
+                // Nếu BẬT
                 if (!nodesLoaded) {
                     await loadAllNodes(); 
-                } else {
+                } else {    
                     allNodesLayer.addTo(map);
                     statusEl.textContent = 'Đã hiển thị tất cả nodes.';
                 }
@@ -138,14 +148,16 @@
             }
         });
 
+        
         async function loadAllNodes() {
             statusEl.textContent = 'Đang tải tất cả nodes...';
             try {
+                
                 const response = await fetch('http://localhost:5000/api/all-nodes');
                 const data = await response.json();
 
                 if (data.status === 'success') {
-
+                    // Lặp qua từng tọa độ node và tạo 1 marker hình tròn nhỏ
                     data.nodes.forEach(coord => {
                         const nodeMarker = L.circleMarker(coord, {
                             radius: 3,
@@ -154,9 +166,11 @@
                             fillOpacity: 0.8,
                             weight: 1
                         });
+                        // Thêm marker vào layer group
                         allNodesLayer.addLayer(nodeMarker);
                     });
                     
+                    // Thêm layer group (chứa tất cả marker) vào bản đồ
                     allNodesLayer.addTo(map);
                     nodesLoaded = true; 
                     statusEl.textContent = 'Đã hiển thị tất cả nodes.';
@@ -171,7 +185,10 @@
             }
         }
 
+        
         findRandomPathBtn.addEventListener('click', async function() {
+            
+            // Xóa đường đi cũ (nếu có)
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
             if (pathLayer) map.removeLayer(pathLayer);
@@ -179,6 +196,7 @@
             statusEl.textContent = 'Đang tìm đường ngẫu nhiên, vui lòng chờ...';
 
             try {
+                
                 const response = await fetch('http://localhost:5000/api/random-junction-path');
                 const data = await response.json();
 
@@ -188,12 +206,30 @@
                         weight: 5,
                         opacity: 0.8
                     }).addTo(map);
-                    
-                    startMarker = L.marker(data.start_point).addTo(map).bindPopup('<b>Điểm bắt đầu</b>').openPopup();
-                    endMarker = L.marker(data.end_point).addTo(map).bindPopup('<b>Điểm kết thúc</b>');
+
+                    // Độ dài quãng đường
+                    let totalDistance = 0;
+                    for (let i = 0; i < data.path.length - 1; i++) {
+                        const p1 = data.path[i];
+                        const p2 = data.path[i + 1];
+                        totalDistance += map.distance(p1, p2);
+                    }
+                    totalDistance = totalDistance.toFixed(2); 
+                    if(totalDistance >= 1000) {
+                        totalDistance = (totalDistance / 1000).toFixed(2) + ' km';
+                    } else {
+                        totalDistance = totalDistance + ' m';
+                    }
+                
+                    statusEl.textContent = `Đã tìm thấy đường đi! Tổng quãng đường: ${totalDistance}`;
+
+                    startMarker = L.marker(data.start_point).addTo(map)
+                        .bindPopup('<b>Điểm bắt đầu</b>').openPopup();
+
+                    endMarker = L.marker(data.end_point).addTo(map)
+                        .bindPopup('<b>Điểm kết thúc</b>');
 
                     map.fitBounds(pathLayer.getBounds());
-                    statusEl.textContent = 'Đã tìm thấy đường đi!';
                 } else {
                     statusEl.textContent = `Lỗi: ${data.message}`;
                 }
