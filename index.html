@@ -102,10 +102,10 @@
         
         let startMarker = null;
         let endMarker = null;
-        let pathLayer = null; // Lớp chứa đường đi màu xanh
+        let pathLayer = null;
 
         
-        let allNodesLayer = L.layerGroup(); // Layer group để chứa TẤT CẢ các node
+        let allNodesLayer = L.layerGroup(); 
         let nodesLoaded = false; 
         
 
@@ -133,7 +133,6 @@
 
         toggleNodesCheck.addEventListener('change', async function() {
             if (this.checked) {
-                // Nếu BẬT
                 if (!nodesLoaded) {
                     await loadAllNodes(); 
                 } else {    
@@ -157,7 +156,6 @@
                 const data = await response.json();
 
                 if (data.status === 'success') {
-                    // Lặp qua từng tọa độ node và tạo 1 marker hình tròn nhỏ
                     data.nodes.forEach(coord => {
                         const nodeMarker = L.circleMarker(coord, {
                             radius: 3,
@@ -166,11 +164,9 @@
                             fillOpacity: 0.8,
                             weight: 1
                         });
-                        // Thêm marker vào layer group
                         allNodesLayer.addLayer(nodeMarker);
                     });
                     
-                    // Thêm layer group (chứa tất cả marker) vào bản đồ
                     allNodesLayer.addTo(map);
                     nodesLoaded = true; 
                     statusEl.textContent = 'Đã hiển thị tất cả nodes.';
@@ -188,7 +184,6 @@
         
         findRandomPathBtn.addEventListener('click', async function() {
             
-            // Xóa đường đi cũ (nếu có)
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
             if (pathLayer) map.removeLayer(pathLayer);
@@ -207,7 +202,6 @@
                         opacity: 0.8
                     }).addTo(map);
 
-                    // Độ dài quãng đường
                     let totalDistance = 0;
                     for (let i = 0; i < data.path.length - 1; i++) {
                         const p1 = data.path[i];
@@ -243,3 +237,4 @@
     </script>
 </body>
 </html>
+
