@@ -3,238 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tìm đường Phường Tương Mai (Ngẫu nhiên)</title>
-
+    <title>Smart Map Pro - Traffic & Flood</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        .header {
-            padding: 10px 20px;
-            background: #f8f8f8;
-            border-bottom: 1px solid #ddd;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .header h2 { margin: 0; color: #333; }
-        .controls { 
-            display: flex; 
-            gap: 12px; 
-            align-items: center; 
-            margin-top: 10px;
-            flex-wrap: wrap; 
-        }
-        .controls button {
-            padding: 8px 12px;
-            font-size: 14px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            background: #007aff;
-            color: white;
-        }
-        .controls button#clearBtn { background: #6c757d; }
-        .controls button:hover { opacity: 0.8; }
-        #status { margin: 0; color: #555; font-weight: 500; }
-        #map { flex-grow: 1; background: #eee; }
-
+        body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; }
+        .sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; padding: 15px; display: flex; flex-direction: column; gap: 10px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000;}
+        h2 { margin: 0 0 10px 0; color: #0056b3; font-size: 18px; }
+        .box { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; }
+        .lbl { font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
+        .row { display: flex; gap: 5px; margin-bottom: 5px; }
+        input, select { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        button { padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; }
+        .btn-main { background: #28a745; color: white; width: 100%; font-weight: bold; }
+        .btn-main:disabled { background: #ccc; }
         
-        .toggle-control {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: #e9ecef;
-            padding: 6px 10px;
-            border-radius: 5px;
-        }
-        .toggle-control label {
-            cursor: pointer;
-            font-size: 14px;
-            color: #333;
-            user-select: none; 
-        }
-        .toggle-control input {
-            cursor: pointer;
-        }
+        .mode-group { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+        .mode-btn { flex: 1; background: #fff; border: none; border-right: 1px solid #ccc; padding: 8px; font-weight: 500; }
+        .mode-btn:last-child { border-right: none; }
+        .mode-btn.active { background: #007bff; color: white; }
+        .mode-btn.active.traffic { background: #ffc107; color: black; }
+        .mode-btn.active.forbidden { background: #343a40; color: white; }
 
+        #trafficOptions { display: none; margin-top: 5px; }
+        .status { padding: 8px; background: #e9ecef; border-radius: 4px; font-size: 12px; text-align: center; margin-top: auto;}
     </style>
 </head>
 <body>
+    <div class="sidebar">
+        <h2>🗺️ Smart Map Control</h2>
 
-    <div class="header">
-        <h2>Bản đồ Phường Tương Mai</h2>
-        <div class="controls">
-            <button id="findRandomPathBtn">Tìm đường ngẫu nhiên</button>
-            <button id="clearBtn">Làm mới</button>
-            
-            <div class="toggle-control">
-                <input type="checkbox" id="toggleNodesCheck">
-                <label for="toggleNodesCheck">Hiện tất cả Nodes</label>
-            </div>
-            
-            <p id="status">Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.</p>
+        <div class="box">
+            <span class="lbl">📍 Tìm đường đi</span>
+            <div class="row"><input id="startAddr" placeholder="Điểm đi..."><button onclick="searchLoc('start')">🔍</button></div>
+            <div class="row"><input id="endAddr" placeholder="Điểm đến..."><button onclick="searchLoc('end')">🔍</button></div>
+            <button id="findBtn" class="btn-main" onclick="findPath()" disabled>🚀 Tìm đường tối ưu</button>
+            <button onclick="resetPath()" style="width:100%; margin-top:5px; background:#6c757d; color:white;">🔄 Reset</button>
         </div>
-    </div>
 
-    <div id="map"></div>
+        <div class="box" style="background: #fff3cd; border-color: #ffeeba;">
+            <span class="lbl">🛠️ Cập nhật giao thông</span>
+            <div class="mode-group">
+                <button id="btnRoute" class="mode-btn active" onclick="setMode('route')">Xem</button>
+                <button id="btnTraffic" class="mode-btn" onclick="setMode('traffic')">Tắc</button>
+                <button id="btnForbidden" class="mode-btn" onclick="setMode('forbidden')">Cấm</button>
+            </div>
+            <div id="trafficOptions">
+                <select id="trafficLevel">
+                    <option value="1">🟡 Đông (x1.2)</option>
+                    <option value="2">🟠 Tắc vừa (x1.5)</option>
+                    <option value="3">🔴 Tắc nặng (x2.0)</option>
+                </select>
+            </div>
+            <div class="row" style="margin-top:10px;">
+                <button onclick="clearData('traffic')" style="flex:1; background:#ffc107;">Xóa Tắc</button>
+                <button onclick="clearData('forbidden')" style="flex:1; background:#343a40; color:white;">Xóa Cấm</button>
+            </div>
+            <button onclick="toggleNodes()" style="width:100%; margin-top:5px; background:#17a2b8; color:white;">🔘 Hiện/Ẩn Nút giao</button>
+        </div>
+
+        <div class="box" style="background: #e3f2fd; border-color: #bbdefb;">
+            <span class="lbl">☔ Mưa & Ngập lụt</span>
+            <div class="row">
+                <input type="number" id="rainInput" value="0" placeholder="mm">
+                <button onclick="setRain()" style="background:#0277bd; color:white;">Cập nhật</button>
+            </div>
+            <button onclick="showFloodedRoads()" style="width:100%; margin-top:5px; background:#0288d1; color:white;">👁️ Hiện đường ngập</button>
+        </div>
+
+        <div class="status" id="status">Sẵn sàng.</div>
+    </div>
+    
+    <div id="map" style="flex-grow: 1;"></div>
 
     <script>
-       
-        const mapCenter = [20.985, 105.855];
-        const map = L.map('map').setView(mapCenter, 16);
+        const map = L.map('map').setView([20.9764, 105.8556], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(map);
+        // --- ĐỊNH NGHĨA ICON MÀU ---
+        // 1. Icon Đỏ (Dùng cho Tắc đường)
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
 
-        
+        // 2. Icon Đen (Dùng cho Cấm đường)
+        const blackIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+        // --------------------------------------------------
+
+        let startMarker, endMarker, pathLayer;
+        let trafficLayer = L.layerGroup().addTo(map);
+        let forbiddenLayer = L.layerGroup().addTo(map);
+        let floodLayer = L.layerGroup().addTo(map);
+        let nodeLayer = L.layerGroup().addTo(map);
+        let isNodeVisible = false;
+
+        let mode = 'route'; 
+        let tempStart = null, tempMarker = null;
+        let routeStep = 'start';
+
         const statusEl = document.getElementById('status');
-        const findRandomPathBtn = document.getElementById('findRandomPathBtn');
-        const clearBtn = document.getElementById('clearBtn');
-        const toggleNodesCheck = document.getElementById('toggleNodesCheck'); 
+        const findBtn = document.getElementById('findBtn');
+        const mapContainer = document.getElementById('map');
 
-        
-        let startMarker = null;
-        let endMarker = null;
-        let pathLayer = null;
-
-        
-        let allNodesLayer = L.layerGroup(); 
-        let nodesLoaded = false; 
-        
-
-        
-        clearBtn.addEventListener('click', function() {
-            if (startMarker) map.removeLayer(startMarker);
-            if (endMarker) map.removeLayer(endMarker);
-            if (pathLayer) map.removeLayer(pathLayer);
-
-            pathLayer = null;
-            startMarker = null;
-            endMarker = null;
-            
-            
-            if (nodesLoaded) {
-                map.removeLayer(allNodesLayer);
-            }
-            toggleNodesCheck.checked = false; 
-            
-
-            statusEl.innerHTML = 'Nhấn nút "Tìm đường ngẫu nhiên" để bắt đầu.';
-            map.setView(mapCenter, 16); 
+        map.on('click', e => {
+            if (mode === 'route') handleRouteClick(e.latlng);
+            else handleSegmentClick(e.latlng);
         });
 
-
-        toggleNodesCheck.addEventListener('change', async function() {
-            if (this.checked) {
-                if (!nodesLoaded) {
-                    await loadAllNodes(); 
-                } else {    
-                    allNodesLayer.addTo(map);
-                    statusEl.textContent = 'Đã hiển thị tất cả nodes.';
-                }
-            } else {
-                if (nodesLoaded) {
-                    map.removeLayer(allNodesLayer); 
-                    statusEl.textContent = 'Đã ẩn tất cả nodes.';
-                }
+        // --- XỬ LÝ NODE ---
+        async function toggleNodes() {
+            if (isNodeVisible) {
+                nodeLayer.clearLayers();
+                isNodeVisible = false;
+                statusEl.textContent = "Đã ẩn nút giao.";
+                return;
             }
-        });
-
-        
-        async function loadAllNodes() {
-            statusEl.textContent = 'Đang tải tất cả nodes...';
+            statusEl.textContent = "Đang tải nodes...";
             try {
-                
-                const response = await fetch('http://localhost:5000/api/all-nodes');
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    data.nodes.forEach(coord => {
-                        const nodeMarker = L.circleMarker(coord, {
-                            radius: 3,
-                            color: '#e63946', 
-                            fillColor: '#e63946',
-                            fillOpacity: 0.8,
-                            weight: 1
-                        });
-                        allNodesLayer.addLayer(nodeMarker);
+                const res = await fetch('http://localhost:5000/api/get-nodes');
+                const d = await res.json();
+                if (d.status === 'success') {
+                    d.nodes.forEach(n => {
+                        L.circleMarker([n.lat, n.lng], {
+                            radius: 3, color: '#444', fillColor: '#888', fillOpacity: 0.8, weight: 1
+                        }).addTo(nodeLayer);
                     });
-                    
-                    allNodesLayer.addTo(map);
-                    nodesLoaded = true; 
-                    statusEl.textContent = 'Đã hiển thị tất cả nodes.';
-                } else {
-                    statusEl.textContent = `Lỗi: ${data.message}`;
-                    toggleNodesCheck.checked = false; 
+                    isNodeVisible = true;
+                    statusEl.textContent = `Đã hiện ${d.nodes.length} nút giao.`;
                 }
-            } catch (error) {
-                console.error('Lỗi khi tải nodes:', error);
-                statusEl.textContent = 'Lỗi kết nối khi tải nodes!';
-                toggleNodesCheck.checked = false; 
+            } catch (e) { console.error(e); statusEl.textContent = "Lỗi tải nodes!"; }
+        }
+
+        // --- XỬ LÝ GIAO THÔNG (Traffic/Forbidden) ---
+        function handleSegmentClick(latlng) {
+            if (!tempStart) {
+                // Chọn điểm đầu tiên
+                tempStart = latlng;
+                
+                // --- LOGIC CHỌN MÀU PIN ---
+                let iconToUse;
+                let modeText;
+                
+                if (mode === 'traffic') {
+                    iconToUse = redIcon;    // Tắc -> Đỏ
+                    modeText = "Tắc";
+                } else {
+                    iconToUse = blackIcon;  // Cấm -> Đen
+                    modeText = "Cấm";
+                }
+
+                tempMarker = L.marker(latlng, { icon: iconToUse, opacity: 0.9 }).addTo(map);
+                tempMarker.bindPopup(`Điểm ĐẦU (${modeText})`).openPopup();
+                // --------------------------------------------------------------
+                
+                statusEl.textContent = `Đã chọn ĐẦU (${modeText}). Hãy chọn điểm CUỐI!`;
+            } else {
+                // Chọn điểm thứ hai và gửi dữ liệu
+                const p1 = tempStart;
+                const p2 = latlng;
+                map.removeLayer(tempMarker); // Xóa marker tạm
+                tempStart = null; tempMarker = null;
+                sendSegmentData(p1, p2);
             }
         }
 
-        
-        findRandomPathBtn.addEventListener('click', async function() {
-            
-            if (startMarker) map.removeLayer(startMarker);
-            if (endMarker) map.removeLayer(endMarker);
-            if (pathLayer) map.removeLayer(pathLayer);
-
-            statusEl.textContent = 'Đang tìm đường ngẫu nhiên, vui lòng chờ...';
-
+        async function sendSegmentData(p1, p2) {
+            statusEl.textContent = "Đang xử lý...";
+            const level = document.getElementById('trafficLevel').value;
             try {
-                
-                const response = await fetch('http://localhost:5000/api/random-junction-path');
-                const data = await response.json();
+                const res = await fetch('http://localhost:5000/api/add-segment', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ p1, p2, mode, level })
+                });
+                const d = await res.json();
+                if (d.status === 'success') {
+                    statusEl.textContent = d.message;
+                    L.polyline(d.path, { color: d.color, weight: 6, opacity: 0.8 }).addTo(mode==='traffic'?trafficLayer:forbiddenLayer);
+                } else alert(d.message);
+            } catch (e) { console.error(e); }
+        }
 
-                if (data.status === 'success') {
-                    pathLayer = L.polyline(data.path, { 
-                        color: 'blue', 
-                        weight: 5,
-                        opacity: 0.8
-                    }).addTo(map);
+        // --- XỬ LÝ MƯA & NGẬP ---
+        async function setRain() {
+            const r = document.getElementById('rainInput').value;
+            await fetch('http://localhost:5000/api/set-rain', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({rain: r})
+            });
+            statusEl.textContent = `Đã cập nhật mưa: ${r}mm`;
+            floodLayer.clearLayers();
+        }
 
-                    let totalDistance = 0;
-                    for (let i = 0; i < data.path.length - 1; i++) {
-                        const p1 = data.path[i];
-                        const p2 = data.path[i + 1];
-                        totalDistance += map.distance(p1, p2);
-                    }
-                    totalDistance = totalDistance.toFixed(2); 
-                    if(totalDistance >= 1000) {
-                        totalDistance = (totalDistance / 1000).toFixed(2) + ' km';
-                    } else {
-                        totalDistance = totalDistance + ' m';
-                    }
-                
-                    statusEl.textContent = `Đã tìm thấy đường đi! Tổng quãng đường: ${totalDistance}`;
+        async function showFloodedRoads() {
+            statusEl.textContent = "Đang tải dữ liệu ngập...";
+            try {
+                const res = await fetch('http://localhost:5000/api/get-flooded-roads');
+                const d = await res.json();
+                floodLayer.clearLayers();
+                if (d.roads && d.roads.length > 0) {
+                    d.roads.forEach(line => {
+                        L.polyline(line, { color: '#00BFFF', weight: 5, dashArray: '10, 10', opacity: 0.8 }).addTo(floodLayer);
+                    });
+                    statusEl.textContent = `Hiện ${d.roads.length} đoạn đường ngập (Mưa: ${d.rain}mm).`;
+                } else { statusEl.textContent = "Không có đoạn nào bị ngập."; }
+            } catch (e) { console.error(e); statusEl.textContent = "Lỗi tải dữ liệu ngập!"; }
+        }
 
-                    startMarker = L.marker(data.start_point).addTo(map)
-                        .bindPopup('<b>Điểm bắt đầu</b>').openPopup();
-
-                    endMarker = L.marker(data.end_point).addTo(map)
-                        .bindPopup('<b>Điểm kết thúc</b>');
-
-                    map.fitBounds(pathLayer.getBounds());
-                } else {
-                    statusEl.textContent = `Lỗi: ${data.message}`;
-                }
-
-            } catch (error) {
-                console.error('Lỗi khi gọi API:', error);
-                statusEl.textContent = 'Lỗi kết nối! (Bạn đã chạy file "app.py" chưa?)';
+        // --- TÌM ĐƯỜNG (Vẫn dùng marker xanh mặc định) ---
+        function handleRouteClick(ll) {
+            if (routeStep === 'start') {
+                if(startMarker) map.removeLayer(startMarker);
+                // Marker mặc định màu xanh
+                startMarker = L.marker(ll).addTo(map).bindPopup("A (Điểm đi)").openPopup();
+                document.getElementById('startAddr').value = `${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
+                routeStep = 'end';
+            } else {
+                if(endMarker) map.removeLayer(endMarker);
+                // Marker mặc định màu xanh
+                endMarker = L.marker(ll).addTo(map).bindPopup("B (Điểm đến)").openPopup();
+                document.getElementById('endAddr').value = `${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
+                routeStep = 'start';
+                findBtn.disabled = false;
             }
-        });
+        }
 
+        async function findPath() {
+            if(!startMarker || !endMarker) return;
+            statusEl.textContent = "Đang tìm đường...";
+            const start = startMarker.getLatLng(), end = endMarker.getLatLng();
+            const res = await fetch('http://localhost:5000/api/find-path', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({start, end})
+            });
+            const d = await res.json();
+            if(pathLayer) map.removeLayer(pathLayer);
+            if(d.status === 'success') {
+                pathLayer = L.polyline(d.path, {color: 'blue', weight: 6}).addTo(map);
+                statusEl.textContent = "Đã tìm thấy đường.";
+            } else statusEl.textContent = "Không tìm thấy đường (Tắc/Ngập)!";
+        }
+
+        // --- HÀM SET MODE ---
+        function setMode(m) {
+            mode = m; tempStart = null; if(tempMarker) map.removeLayer(tempMarker);
+            
+            // UI Button State
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active', 'traffic', 'forbidden'));
+            const btn = document.getElementById(m==='route'?'btnRoute':(m==='traffic'?'btnTraffic':'btnForbidden'));
+            btn.classList.add('active'); if(m!=='route') btn.classList.add(m);
+            document.getElementById('trafficOptions').style.display = m==='traffic'?'block':'none';
+
+            statusEl.textContent = m === 'route' ? "Chế độ Tìm đường." : `Chế độ chọn đường ${m === 'traffic' ? 'Tắc' : 'Cấm'}. Click lên bản đồ để chọn 2 điểm.`;
+        }
+
+        async function clearData(type) {
+            if(confirm('Xóa dữ liệu này?')) {
+                await fetch('http://localhost:5000/api/clear-data', {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({target: type})
+                });
+                (type==='traffic'?trafficLayer:forbiddenLayer).clearLayers();
+            }
+        }
+        function resetPath() {
+            if(pathLayer) map.removeLayer(pathLayer);
+            if(startMarker) map.removeLayer(startMarker);
+            if(endMarker) map.removeLayer(endMarker);
+            startMarker=null; endMarker=null; pathLayer=null; findBtn.disabled=true;
+        }
     </script>
 </body>
 </html>
-
