@@ -3,74 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Map Pro - Traffic & Flood</title>
+    <title>Smart Map Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; }
-        .sidebar { width: 320px; background: #fff; border-right: 1px solid #ddd; padding: 15px; display: flex; flex-direction: column; gap: 10px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000;}
-        h2 { margin: 0 0 10px 0; color: #0056b3; font-size: 18px; }
-        .box { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; }
-        .lbl { font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 5px; }
-        .row { display: flex; gap: 5px; margin-bottom: 5px; }
-        input, select { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-        button { padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: 0.2s; }
-        .btn-main { background: #28a745; color: white; width: 100%; font-weight: bold; }
-        .btn-main:disabled { background: #ccc; }
+        .sidebar { width: 340px; background: #fff; border-right: 1px solid #ddd; padding: 15px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; z-index: 1000; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        h2 { margin: 0; color: #0056b3; font-size: 18px; display: flex; align-items: center; gap: 5px;}
         
-        .mode-group { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
-        .mode-btn { flex: 1; background: #fff; border: none; border-right: 1px solid #ccc; padding: 8px; font-weight: 500; }
-        .mode-btn:last-child { border-right: none; }
-        .mode-btn.active { background: #007bff; color: white; }
-        .mode-btn.active.traffic { background: #ffc107; color: black; }
-        .mode-btn.active.forbidden { background: #343a40; color: white; }
-
-        #trafficOptions { display: none; margin-top: 5px; }
-        .status { padding: 8px; background: #e9ecef; border-radius: 4px; font-size: 12px; text-align: center; margin-top: auto;}
+        .box { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #e9ecef; margin-bottom: 5px; }
+        .box.rain { background: #e3f2fd; border-color: #b3d7ff; }
+        .box.traffic { background: #fff3cd; border-color: #ffeeba; }
+        
+        .lbl { font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 4px; }
+        .row { display: flex; gap: 5px; align-items: center; }
+        
+        input[type="text"] { flex: 1; padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px;}
+        input[type="number"] { padding: 6px; width: 60px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px;}
+        
+        button { padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s; }
+        .btn-blue { background: #17a2b8; color: white; }
+        .btn-green { background: #28a745; color: white; width: 100%; margin-top: 5px; font-size: 14px; } .btn-green:disabled { background: #ccc; }
+        .btn-update { background: #007aff; color: white; flex: 1; }
+        .btn-danger { background: #dc3545; color: white; width: 100%; margin-top: 5px; }
+        .btn-reset { background: #6c757d; color: white; width: 100%; margin-top: 5px; }
+        .btn-visual { background: #20c997; color: white; width: 100%; margin-top: 5px; }
+        
+        /* Mode Buttons Toggle */
+        .mode-group { display: flex; gap: 2px; margin-top: 5px; }
+        .mode-btn { flex: 1; border: 1px solid #ccc; background: #fff; color: #333; font-size: 11px; padding: 6px 2px;}
+        .mode-btn.active-route { background: #28a745; color: white; border-color: #28a745; }
+        .mode-btn.active-traffic { background: #ffc107; color: #000; border-color: #ffc107; }
+        .mode-btn.active-forbidden { background: #343a40; color: white; border-color: #343a40; }
+        
+        .status { padding: 8px; background: #e9ecef; border-radius: 4px; font-size: 12px; text-align: center; font-weight: 500;}
+        .chk-row { display: flex; align-items: center; gap: 5px; font-size: 12px; margin-top: 5px;}
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <h2>🗺️ Smart Map Control</h2>
+        <h2>🗺️ Smart Map Pro</h2>
 
         <div class="box">
-            <span class="lbl">📍 Tìm đường đi</span>
-            <div class="row"><input id="startAddr" placeholder="Điểm đi..."><button onclick="searchLoc('start')">🔍</button></div>
-            <div class="row"><input id="endAddr" placeholder="Điểm đến..."><button onclick="searchLoc('end')">🔍</button></div>
-            <button id="findBtn" class="btn-main" onclick="findPath()" disabled>🚀 Tìm đường tối ưu</button>
-            <button onclick="resetPath()" style="width:100%; margin-top:5px; background:#6c757d; color:white;">🔄 Reset</button>
+            <span class="lbl">📍 Tìm đường</span>
+            <div style="margin-bottom: 5px;">
+                <div class="row"><input id="startAddr" type="text" placeholder="Điểm đi..."><button class="btn-blue" onclick="searchLoc('start')">🔍</button></div>
+                <div id="startCoord" style="font-size: 10px; color: #777;">Chưa chọn</div>
+            </div>
+            <div>
+                <div class="row"><input id="endAddr" type="text" placeholder="Điểm đến..."><button class="btn-blue" onclick="searchLoc('end')">🔍</button></div>
+                <div id="endCoord" style="font-size: 10px; color: #777;">Chưa chọn</div>
+            </div>
+            <button id="findBtn" class="btn-green" onclick="findPath()" disabled>🚀 Tìm đường</button>
+            <button class="btn-reset" onclick="resetAll()">🔄 Reset</button>
         </div>
 
-        <div class="box" style="background: #fff3cd; border-color: #ffeeba;">
-            <span class="lbl">🛠️ Cập nhật giao thông</span>
-            <div class="mode-group">
-                <button id="btnRoute" class="mode-btn active" onclick="setMode('route')">Xem</button>
-                <button id="btnTraffic" class="mode-btn" onclick="setMode('traffic')">Tắc</button>
-                <button id="btnForbidden" class="mode-btn" onclick="setMode('forbidden')">Cấm</button>
+        <div class="box rain">
+            <span class="lbl" style="color:#0056b3">☔ Ngập lụt & An toàn</span>
+            <div class="row">
+                <input id="rainInput" type="number" placeholder="mm" value="0">
+                <span>mm</span>
+                <button class="btn-update" onclick="setRain()">Cập nhật</button>
             </div>
-            <div id="trafficOptions">
-                <select id="trafficLevel">
-                    <option value="1">🟡 Đông (x1.2)</option>
-                    <option value="2">🟠 Tắc vừa (x1.5)</option>
-                    <option value="3">🔴 Tắc nặng (x2.0)</option>
+            <button class="btn-visual" onclick="showSafeRoads()">👁️ Xem đường đi được</button>
+        </div>
+
+        <div class="box traffic">
+            <span class="lbl" style="color:#856404">🛠️ Công cụ Bản đồ</span>
+            <div class="row">
+                <span style="font-size: 12px;">Độ tắc:</span>
+                <select id="trafficLevel" style="flex:1; padding:6px; border:1px solid #ced4da; border-radius:4px; font-size:13px;">
+                    <option value="light">Đông (x1.2)</option>
+                    <option value="medium">Tắc vừa (x1.5)</option>
+                    <option value="heavy">Tắc nặng (x2.0)</option>
                 </select>
             </div>
-            <div class="row" style="margin-top:10px;">
-                <button onclick="clearData('traffic')" style="flex:1; background:#ffc107;">Xóa Tắc</button>
-                <button onclick="clearData('forbidden')" style="flex:1; background:#343a40; color:white;">Xóa Cấm</button>
+            
+            <div class="mode-group">
+                <button id="btnRoute" class="mode-btn active-route" onclick="setMode('route')">📍 Chọn</button>
+                <button id="btnTraffic" class="mode-btn" onclick="setMode('traffic')">⚠️ Tắc</button>
+                <button id="btnForbidden" class="mode-btn" onclick="setMode('forbidden')">⛔ Cấm</button>
             </div>
-            <button onclick="toggleNodes()" style="width:100%; margin-top:5px; background:#17a2b8; color:white;">🔘 Hiện/Ẩn Nút giao</button>
+
+            <div style="display: flex; gap: 5px;">
+                <button class="btn-danger" style="background: #ffc107; color: #000" onclick="clearData('traffic')">Xóa Tắc</button>
+                <button class="btn-danger" style="background: #343a40;" onclick="clearData('forbidden')">Xóa Cấm</button>
+            </div>
         </div>
 
-        <div class="box" style="background: #e3f2fd; border-color: #bbdefb;">
-            <span class="lbl">☔ Mưa & Ngập lụt</span>
-            <div class="row">
-                <input type="number" id="rainInput" value="0" placeholder="mm">
-                <button onclick="setRain()" style="background:#0277bd; color:white;">Cập nhật</button>
-            </div>
-            <button onclick="showFloodedRoads()" style="width:100%; margin-top:5px; background:#0288d1; color:white;">👁️ Hiện đường ngập</button>
+        <div class="chk-row">
+            <input type="checkbox" id="showNodes"> <label for="showNodes">Hiện Nodes</label>
         </div>
-
         <div class="status" id="status">Sẵn sàng.</div>
     </div>
     
@@ -78,210 +101,342 @@
 
     <script>
         const map = L.map('map').setView([20.9764, 105.8556], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-        // --- ĐỊNH NGHĨA ICON MÀU ---
-        // 1. Icon Đỏ (Dùng cho Tắc đường)
-        const redIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
-        });
-
-        // 2. Icon Đen (Dùng cho Cấm đường)
-        const blackIcon = new L.Icon({
-            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png',
-            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-            iconSize: [25, 41],
-            iconAnchor: [12, 41],
-            popupAnchor: [1, -34],
-            shadowSize: [41, 41]
-        });
-        // --------------------------------------------------
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
 
         let startMarker, endMarker, pathLayer;
         let trafficLayer = L.layerGroup().addTo(map);
-        let forbiddenLayer = L.layerGroup().addTo(map);
-        let floodLayer = L.layerGroup().addTo(map);
-        let nodeLayer = L.layerGroup().addTo(map);
-        let isNodeVisible = false;
-
+        let forbiddenLayer = L.layerGroup().addTo(map); 
+        let safeRoadsLayer = L.layerGroup().addTo(map);
+        let nodesLayer = L.layerGroup();
+        
+        let startLL = null, endLL = null;
         let mode = 'route'; 
-        let tempStart = null, tempMarker = null;
-        let routeStep = 'start';
-
+        let selectTarget = 'start';
         const statusEl = document.getElementById('status');
         const findBtn = document.getElementById('findBtn');
-        const mapContainer = document.getElementById('map');
+        const showNodesChk = document.getElementById('showNodes');
 
-        map.on('click', e => {
-            if (mode === 'route') handleRouteClick(e.latlng);
-            else handleSegmentClick(e.latlng);
+        // Icon cho các loại pin
+        const redIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34]
         });
 
-        // --- XỬ LÝ NODE ---
-        async function toggleNodes() {
-            if (isNodeVisible) {
-                nodeLayer.clearLayers();
-                isNodeVisible = false;
-                statusEl.textContent = "Đã ẩn nút giao.";
-                return;
-            }
-            statusEl.textContent = "Đang tải nodes...";
-            try {
-                const res = await fetch('http://localhost:5000/api/get-nodes');
-                const d = await res.json();
-                if (d.status === 'success') {
-                    d.nodes.forEach(n => {
-                        L.circleMarker([n.lat, n.lng], {
-                            radius: 3, color: '#444', fillColor: '#888', fillOpacity: 0.8, weight: 1
-                        }).addTo(nodeLayer);
-                    });
-                    isNodeVisible = true;
-                    statusEl.textContent = `Đã hiện ${d.nodes.length} nút giao.`;
+        const blackIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-black.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34]
+        });
+
+        // Biến chọn đoạn tắc đường & đường cấm
+        let trafficStartLL = null, trafficEndLL = null;
+        let trafficStartMarker = null, trafficEndMarker = null;
+        let forbiddenStartLL = null, forbiddenEndLL = null;
+        let forbiddenStartMarker = null, forbiddenEndMarker = null;
+
+        // --- MAP CLICK ---
+        map.on('click', e => {
+            if (mode === 'route') {
+                if (pathLayer) resetAll();
+                if (selectTarget === 'start') { 
+                    setPt('start', e.latlng, "Click map"); 
+                    selectTarget = 'end'; 
+                } else { 
+                    setPt('end', e.latlng, "Click map"); 
+                    selectTarget = 'start'; 
                 }
-            } catch (e) { console.error(e); statusEl.textContent = "Lỗi tải nodes!"; }
-        }
-
-        // --- XỬ LÝ GIAO THÔNG (Traffic/Forbidden) ---
-        function handleSegmentClick(latlng) {
-            if (!tempStart) {
-                // Chọn điểm đầu tiên
-                tempStart = latlng;
-                
-                // --- LOGIC CHỌN MÀU PIN ---
-                let iconToUse;
-                let modeText;
-                
-                if (mode === 'traffic') {
-                    iconToUse = redIcon;    // Tắc -> Đỏ
-                    modeText = "Tắc";
-                } else {
-                    iconToUse = blackIcon;  // Cấm -> Đen
-                    modeText = "Cấm";
-                }
-
-                tempMarker = L.marker(latlng, { icon: iconToUse, opacity: 0.9 }).addTo(map);
-                tempMarker.bindPopup(`Điểm ĐẦU (${modeText})`).openPopup();
-                // --------------------------------------------------------------
-                
-                statusEl.textContent = `Đã chọn ĐẦU (${modeText}). Hãy chọn điểm CUỐI!`;
-            } else {
-                // Chọn điểm thứ hai và gửi dữ liệu
-                const p1 = tempStart;
-                const p2 = latlng;
-                map.removeLayer(tempMarker); // Xóa marker tạm
-                tempStart = null; tempMarker = null;
-                sendSegmentData(p1, p2);
+            } else if (mode === 'traffic') {
+                handleTrafficClick(e.latlng);
+            } else if (mode === 'forbidden') {
+                handleForbiddenClick(e.latlng);
             }
-        }
+        });
 
-        async function sendSegmentData(p1, p2) {
-            statusEl.textContent = "Đang xử lý...";
-            const level = document.getElementById('trafficLevel').value;
-            try {
-                const res = await fetch('http://localhost:5000/api/add-segment', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ p1, p2, mode, level })
-                });
-                const d = await res.json();
-                if (d.status === 'success') {
-                    statusEl.textContent = d.message;
-                    L.polyline(d.path, { color: d.color, weight: 6, opacity: 0.8 }).addTo(mode==='traffic'?trafficLayer:forbiddenLayer);
-                } else alert(d.message);
-            } catch (e) { console.error(e); }
-        }
-
-        // --- XỬ LÝ MƯA & NGẬP ---
-        async function setRain() {
-            const r = document.getElementById('rainInput').value;
-            await fetch('http://localhost:5000/api/set-rain', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({rain: r})
-            });
-            statusEl.textContent = `Đã cập nhật mưa: ${r}mm`;
-            floodLayer.clearLayers();
-        }
-
-        async function showFloodedRoads() {
-            statusEl.textContent = "Đang tải dữ liệu ngập...";
-            try {
-                const res = await fetch('http://localhost:5000/api/get-flooded-roads');
-                const d = await res.json();
-                floodLayer.clearLayers();
-                if (d.roads && d.roads.length > 0) {
-                    d.roads.forEach(line => {
-                        L.polyline(line, { color: '#00BFFF', weight: 5, dashArray: '10, 10', opacity: 0.8 }).addTo(floodLayer);
-                    });
-                    statusEl.textContent = `Hiện ${d.roads.length} đoạn đường ngập (Mưa: ${d.rain}mm).`;
-                } else { statusEl.textContent = "Không có đoạn nào bị ngập."; }
-            } catch (e) { console.error(e); statusEl.textContent = "Lỗi tải dữ liệu ngập!"; }
-        }
-
-        // --- TÌM ĐƯỜNG (Vẫn dùng marker xanh mặc định) ---
-        function handleRouteClick(ll) {
-            if (routeStep === 'start') {
-                if(startMarker) map.removeLayer(startMarker);
-                // Marker mặc định màu xanh
-                startMarker = L.marker(ll).addTo(map).bindPopup("A (Điểm đi)").openPopup();
-                document.getElementById('startAddr').value = `${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
-                routeStep = 'end';
+        // --- LOGIC CHÍNH ---
+        function setPt(type, ll, label) {
+            const elCoord = document.getElementById(type+'Coord');
+            const elAddr = document.getElementById(type+'Addr');
+            
+            if (type === 'start') {
+                if (startMarker) map.removeLayer(startMarker);
+                startMarker = L.marker(ll).addTo(map).bindPopup("A").openPopup();
+                startLL = ll;
             } else {
-                if(endMarker) map.removeLayer(endMarker);
-                // Marker mặc định màu xanh
-                endMarker = L.marker(ll).addTo(map).bindPopup("B (Điểm đến)").openPopup();
-                document.getElementById('endAddr').value = `${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
-                routeStep = 'start';
-                findBtn.disabled = false;
+                if (endMarker) map.removeLayer(endMarker);
+                endMarker = L.marker(ll, {icon: redIcon}).addTo(map).bindPopup("B").openPopup();
+                endLL = ll;
             }
+            elCoord.innerText = `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+            if (label !== "Click map") elAddr.value = label;
+            findBtn.disabled = !(startLL && endLL);
         }
+
 
         async function findPath() {
-            if(!startMarker || !endMarker) return;
-            statusEl.textContent = "Đang tìm đường...";
-            const start = startMarker.getLatLng(), end = endMarker.getLatLng();
-            const res = await fetch('http://localhost:5000/api/find-path', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({start, end})
-            });
-            const d = await res.json();
-            if(pathLayer) map.removeLayer(pathLayer);
-            if(d.status === 'success') {
-                pathLayer = L.polyline(d.path, {color: 'blue', weight: 6}).addTo(map);
-                statusEl.textContent = "Đã tìm thấy đường.";
-            } else statusEl.textContent = "Không tìm thấy đường (Tắc/Ngập)!";
+            if (!startLL || !endLL) return;
+            statusEl.textContent = "Đang tìm..."; 
+            statusEl.style.color = "black";
+            findBtn.disabled=true;
+            
+            try {
+                const res = await fetch('http://localhost:5000/api/find-path', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({start:startLL, end:endLL})
+                });
+                const d = await res.json();
+                
+                if (d.status==='success') {
+                    if (pathLayer) map.removeLayer(pathLayer);
+                    pathLayer = L.polyline(d.path, {color:'blue', weight:6}).addTo(map);
+                    map.fitBounds(pathLayer.getBounds(), {padding: [50, 50]});
+                    statusEl.textContent = "Đã tìm thấy đường đi an toàn.";
+                    statusEl.style.color = "green";
+                } else { 
+                    alert(d.message); 
+                    statusEl.textContent = "❌ " + d.message;
+                    statusEl.style.color = "red";
+                    if (pathLayer) map.removeLayer(pathLayer); 
+                }
+            } catch(e) { 
+                console.error(e); 
+                statusEl.textContent = "Lỗi kết nối server!";
+            } finally { 
+                findBtn.disabled=false; 
+            }
+        }
+    
+
+        function resetAll() {
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            if (pathLayer) map.removeLayer(pathLayer);
+            startMarker=null; endMarker=null; pathLayer=null; startLL=null; endLL=null;
+            document.getElementById('startAddr').value=""; document.getElementById('endAddr').value="";
+            selectTarget='start'; findBtn.disabled=true;
+            statusEl.textContent = "Đã Reset.";
+            
+            // Xóa luôn layer hiển thị an toàn nếu có
+            safeRoadsLayer.clearLayers();
         }
 
-        // --- HÀM SET MODE ---
-        function setMode(m) {
-            mode = m; tempStart = null; if(tempMarker) map.removeLayer(tempMarker);
-            
-            // UI Button State
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active', 'traffic', 'forbidden'));
-            const btn = document.getElementById(m==='route'?'btnRoute':(m==='traffic'?'btnTraffic':'btnForbidden'));
-            btn.classList.add('active'); if(m!=='route') btn.classList.add(m);
-            document.getElementById('trafficOptions').style.display = m==='traffic'?'block':'none';
+        // --- SAFE ROADS (XANH LÁ) ---
+        async function showSafeRoads() {
+            // Tắt Nodes nếu đang bật (theo yêu cầu)
+            if(showNodesChk.checked) {
+                showNodesChk.checked = false;
+                nodesLayer.remove();
+            }
 
-            statusEl.textContent = m === 'route' ? "Chế độ Tìm đường." : `Chế độ chọn đường ${m === 'traffic' ? 'Tắc' : 'Cấm'}. Click lên bản đồ để chọn 2 điểm.`;
+            statusEl.textContent = "Đang tải đường an toàn...";
+            try {
+                const res = await fetch('http://localhost:5000/api/safe-roads');
+                const d = await res.json();
+                
+                safeRoadsLayer.clearLayers(); // Xóa cũ
+                
+                d.roads.forEach(line => {
+                    L.polyline(line, {color: '#28a745', weight: 3, opacity: 0.8}).addTo(safeRoadsLayer);
+                });
+                statusEl.textContent = "Đã hiển thị đường đi được (Màu xanh).";
+            } catch(e) { alert("Lỗi tải đường an toàn"); }
+        }
+
+        // --- FORBIDDEN & TRAFFIC ---
+        function setMode(m) {
+            mode = m;
+            document.getElementById('btnRoute').className = m==='route'?'mode-btn active-route':'mode-btn';
+            document.getElementById('btnTraffic').className = m==='traffic'?'mode-btn active-traffic':'mode-btn';
+            document.getElementById('btnForbidden').className = m==='forbidden'?'mode-btn active-forbidden':'mode-btn';
+            
+            if(m==='route') map.getContainer().style.cursor='crosshair';
+            else if(m==='traffic') map.getContainer().style.cursor='copy'; 
+            else map.getContainer().style.cursor='not-allowed'; // Icon cấm
+            
+            const txt = {
+                'route':'Chọn điểm đi/đến',
+                'traffic':'Click 2 điểm (đầu & cuối) của đoạn đường tắc',
+                'forbidden':'Click 2 điểm (đầu & cuối) của đoạn đường CẤM'
+            };
+            statusEl.textContent = txt[m];
         }
 
         async function clearData(type) {
-            if(confirm('Xóa dữ liệu này?')) {
-                await fetch('http://localhost:5000/api/clear-data', {
-                    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({target: type})
-                });
-                (type==='traffic'?trafficLayer:forbiddenLayer).clearLayers();
+            const api = type==='traffic'?'/api/clear-traffic':'/api/clear-forbidden';
+            const layer = type==='traffic'?trafficLayer:forbiddenLayer;
+            if(confirm(`Xóa hết dữ liệu ${type}?`)) {
+                await fetch('http://localhost:5000'+api, {method:'POST'});
+                layer.clearLayers();
+
+                if (type === 'traffic') {
+                    trafficStartLL = trafficEndLL = null;
+                    trafficStartMarker = trafficEndMarker = null;
+                } else {
+                    forbiddenStartLL = forbiddenEndLL = null;
+                    forbiddenStartMarker = forbiddenEndMarker = null;
+                }
+
+                statusEl.textContent = `Đã xóa ${type}.`;
             }
         }
-        function resetPath() {
-            if(pathLayer) map.removeLayer(pathLayer);
-            if(startMarker) map.removeLayer(startMarker);
-            if(endMarker) map.removeLayer(endMarker);
-            startMarker=null; endMarker=null; pathLayer=null; findBtn.disabled=true;
+
+        // --- TẮC ĐƯỜNG THEO ĐOẠN ---
+        function handleTrafficClick(ll) {
+            if (!trafficStartLL) {
+                trafficStartLL = ll;
+                trafficStartMarker = L.marker(ll, {icon: redIcon})
+                    .addTo(trafficLayer)
+                    .bindPopup("Đầu đoạn tắc")
+                    .openPopup();
+                statusEl.textContent = "Đã chọn điểm đầu. Chọn tiếp điểm cuối của đoạn tắc.";
+            } else if (!trafficEndLL) {
+                trafficEndLL = ll;
+                trafficEndMarker = L.marker(ll, {icon: redIcon})
+                    .addTo(trafficLayer)
+                    .bindPopup("Cuối đoạn tắc")
+                    .openPopup();
+                addTrafficSegment();
+            } else {
+                // Nếu đã chọn đủ 2 điểm rồi mà vẫn click tiếp -> reset chọn mới
+                trafficStartLL = ll;
+                trafficEndLL = null;
+                trafficStartMarker = L.marker(ll, {icon: redIcon})
+                    .addTo(trafficLayer)
+                    .bindPopup("Đầu đoạn tắc")
+                    .openPopup();
+                statusEl.textContent = "Đã reset đoạn tắc, hãy chọn điểm cuối mới.";
+            }
         }
+
+        async function addTrafficSegment() {
+            if (!trafficStartLL || !trafficEndLL) return;
+            const level = document.getElementById('trafficLevel').value || 'light';
+            statusEl.textContent = "Đang ghi nhận đoạn đường tắc...";
+
+            try {
+                const res = await fetch('http://localhost:5000/api/add-traffic', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        start: trafficStartLL,
+                        end: trafficEndLL,
+                        level
+                    })
+                });
+                const d = await res.json();
+                if (d.status === 'success') {
+                    const color = d.color || (level === 'medium' ? '#ff7f00' : (level === 'heavy' ? '#ff0000' : '#ffd000'));
+                    L.polyline(d.path, {color: color, weight: 5, opacity: 0.9}).addTo(trafficLayer);
+                    statusEl.textContent = "Đã thêm đoạn đường tắc.";
+                } else {
+                    alert(d.message || 'Không thêm được đoạn tắc');
+                    statusEl.textContent = "❌ Không thêm được đoạn tắc.";
+                }
+            } catch(e) {
+                console.error(e);
+                statusEl.textContent = "Lỗi kết nối server khi thêm đoạn tắc.";
+            } finally {
+                // reset state chọn đoạn, nhưng pin & polyline vẫn giữ trên layer
+                trafficStartLL = null;
+                trafficEndLL = null;
+                trafficStartMarker = null;
+                trafficEndMarker = null;
+            }
+        }
+
+        // --- ĐƯỜNG CẤM THEO ĐOẠN ---
+        function handleForbiddenClick(ll) {
+            if (!forbiddenStartLL) {
+                forbiddenStartLL = ll;
+                forbiddenStartMarker = L.marker(ll, {icon: blackIcon})
+                    .addTo(forbiddenLayer)
+                    .bindPopup("Đầu đoạn CẤM")
+                    .openPopup();
+                statusEl.textContent = "Đã chọn điểm đầu đường cấm. Chọn tiếp điểm cuối.";
+            } else if (!forbiddenEndLL) {
+                forbiddenEndLL = ll;
+                forbiddenEndMarker = L.marker(ll, {icon: blackIcon})
+                    .addTo(forbiddenLayer)
+                    .bindPopup("Cuối đoạn CẤM")
+                    .openPopup();
+                addForbiddenSegment();
+            } else {
+                forbiddenStartLL = ll;
+                forbiddenEndLL = null;
+                forbiddenStartMarker = L.marker(ll, {icon: blackIcon})
+                    .addTo(forbiddenLayer)
+                    .bindPopup("Đầu đoạn CẤM")
+                    .openPopup();
+                statusEl.textContent = "Đã reset đoạn cấm, hãy chọn điểm cuối mới.";
+            }
+        }
+
+        async function addForbiddenSegment() {
+            if (!forbiddenStartLL || !forbiddenEndLL) return;
+            statusEl.textContent = "Đang ghi nhận đoạn đường CẤM...";
+            try {
+                const res = await fetch('http://localhost:5000/api/add-forbidden', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({
+                        start: forbiddenStartLL,
+                        end: forbiddenEndLL
+                    })
+                });
+                const d = await res.json();
+                if (d.status === 'success') {
+                    L.polyline(d.path, {color: '#000000', weight: 5, opacity: 0.9}).addTo(forbiddenLayer);
+                    statusEl.textContent = "Đã đánh dấu đoạn đường CẤM.";
+                } else {
+                    alert(d.message || 'Không thêm được đường cấm');
+                    statusEl.textContent = "❌ Không thêm được đường cấm.";
+                }
+            } catch(e) {
+                console.error(e);
+                statusEl.textContent = "Lỗi kết nối server khi thêm đường cấm.";
+            } finally {
+                forbiddenStartLL = null;
+                forbiddenEndLL = null;
+                forbiddenStartMarker = null;
+                forbiddenEndMarker = null;
+            }
+        }
+
+        // --- CÁC HÀM KHÁC ---
+        async function setRain() {
+            const r = document.getElementById('rainInput').value;
+            await fetch('http://localhost:5000/api/set-rain', {
+                method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({rain:r})
+            });
+            statusEl.textContent = "Đã cập nhật mưa.";
+        }
+
+        async function searchLoc(type) {
+            const q = document.getElementById(type+'Addr').value;
+            if(!q) return;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`);
+            const d = await res.json();
+            if(d.length) {
+                const ll = {lat:parseFloat(d[0].lat), lng:parseFloat(d[0].lon)};
+                if(pathLayer) resetAll();
+                setPt(type, ll, d[0].display_name);
+                map.setView(ll, 16);
+            } else alert("Không tìm thấy");
+        }
+
+        showNodesChk.addEventListener('change', async function() {
+            if(this.checked) {
+                safeRoadsLayer.clearLayers(); // Tắt SafeRoads nếu bật Node cho đỡ rối
+                const res = await fetch('http://localhost:5000/api/all-nodes');
+                const d = await res.json();
+                d.nodes.forEach(n => L.circleMarker(n, {radius:2, color:'blue', opacity:0.3}).addTo(nodesLayer));
+                nodesLayer.addTo(map);
+            } else nodesLayer.clearLayers();
+        });
     </script>
 </body>
 </html>
