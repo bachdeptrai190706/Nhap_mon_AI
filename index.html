@@ -177,7 +177,7 @@
         }
 
 
-        async function findPath() {
+async function findPath() {
             if (!startLL || !endLL) return;
             statusEl.textContent = "Đang tìm..."; 
             statusEl.style.color = "black";
@@ -192,10 +192,23 @@
                 
                 if (d.status==='success') {
                     if (pathLayer) map.removeLayer(pathLayer);
-                    pathLayer = L.polyline(d.path, {color:'blue', weight:6}).addTo(map);
+                    
+                    // Nếu có warning (phải lội nước), đổi màu đường đi sang màu Cam/Tím để cảnh báo
+                    const pathColor = d.warning ? '#ff6600' : 'green'; 
+                    const dashArray = d.warning ? '10, 10' : null; // Nét đứt nếu ngập
+
+                    pathLayer = L.polyline(d.path, {color: pathColor, weight:6, dashArray: dashArray}).addTo(map);
                     map.fitBounds(pathLayer.getBounds(), {padding: [50, 50]});
-                    statusEl.textContent = "Đã tìm thấy đường đi an toàn.";
-                    statusEl.style.color = "green";
+                    
+                    if (d.warning) {
+                        statusEl.textContent = "⚠️ " + d.message;
+                        statusEl.style.color = "#d63384"; // Màu tím cảnh báo
+                        alert(d.message + "\nChúng tôi đã chọn lộ trình ít ngập nhất có thể.");
+                    } else {
+                        statusEl.textContent = "✅ Đã tìm thấy đường đi an toàn.";
+                        statusEl.style.color = "green";
+                    }
+
                 } else { 
                     alert(d.message); 
                     statusEl.textContent = "❌ " + d.message;
@@ -209,8 +222,6 @@
                 findBtn.disabled=false; 
             }
         }
-    
-
         function resetAll() {
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
@@ -225,26 +236,63 @@
         }
 
         // --- SAFE ROADS (XANH LÁ) ---
-        async function showSafeRoads() {
-            // Tắt Nodes nếu đang bật (theo yêu cầu)
-            if(showNodesChk.checked) {
-                showNodesChk.checked = false;
-                nodesLayer.remove();
-            }
+// --- SAFE ROADS (XANH LÁ) ---
+async function showSafeRoads() {
+    // 1. Tự động lấy giá trị từ ô input và gửi lên server trước
+    const rainVal = document.getElementById('rainInput').value;
+    
+    // Gửi cập nhật mưa (âm thầm)
+    await fetch('http://localhost:5000/api/set-rain', {
+        method: 'POST', 
+        headers: {'Content-Type':'application/json'}, 
+        body: JSON.stringify({rain: rainVal})
+    });
+    
+    // 2. Sau đó mới lấy dữ liệu đường ngập
+    if (showNodesChk.checked) {
+        showNodesChk.checked = false;
+        nodesLayer.clearLayers();
+    }
 
-            statusEl.textContent = "Đang tải đường an toàn...";
-            try {
-                const res = await fetch('http://localhost:5000/api/safe-roads');
-                const d = await res.json();
-                
-                safeRoadsLayer.clearLayers(); // Xóa cũ
-                
-                d.roads.forEach(line => {
-                    L.polyline(line, {color: '#28a745', weight: 3, opacity: 0.8}).addTo(safeRoadsLayer);
-                });
-                statusEl.textContent = "Đã hiển thị đường đi được (Màu xanh).";
-            } catch(e) { alert("Lỗi tải đường an toàn"); }
+    statusEl.textContent = `Đang tải dữ liệu với mức mưa ${rainVal}mm...`;
+    try {
+        const res = await fetch('http://localhost:5000/api/safe-roads');
+        const d = await res.json();
+
+        safeRoadsLayer.clearLayers(); // Xóa sạch vẽ cũ
+
+        const flooded = d.flooded_roads || [];
+        
+        // Nếu không có đường ngập
+        if (flooded.length === 0) {
+            statusEl.textContent = "✅ Không có đường nào bị ngập với lượng mưa này.";
+            statusEl.style.color = "green";
+            return;
         }
+
+        // Vẽ đường ngập
+        const allLatLngs = [];
+        flooded.forEach(line => {
+            L.polyline(line, {
+                color: '#0066ff',   // Màu đỏ tươi cảnh báo
+                weight: 4,          // Dày hơn chút cho dễ nhìn
+                opacity: 0.8,
+            }).addTo(safeRoadsLayer);
+            allLatLngs.push(...line);
+        });
+
+        if (allLatLngs.length > 0) {
+            map.fitBounds(allLatLngs, { padding: [40, 40] });
+        }
+
+        statusEl.textContent = `⚠️ Có ${flooded.length} đoạn đường bị NGẬP!`;
+        statusEl.style.color = "red";
+
+    } catch (e) {
+        console.error(e);
+        statusEl.textContent = "Lỗi tải dữ liệu ngập lụt.";
+    }
+}
 
         // --- FORBIDDEN & TRAFFIC ---
         function setMode(m) {
