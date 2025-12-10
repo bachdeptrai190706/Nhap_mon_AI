@@ -55,39 +55,68 @@ def is_node_forbidden(node_lat, node_lng):
     return False
 
 # --- CHECK NGẬP LỤT (giữ logic cũ) ---
+# --- CẢI TIẾN HÀM CHECK CHIỀU RỘNG ---
+# --- CẢI TIẾN HÀM CHECK CHIỀU RỘNG ---
 def get_road_width(edge_data):
+    # Lấy width từ dữ liệu map
     width_raw = edge_data.get('width', None)
+    final_width = None
+
     if width_raw:
+        # Xử lý trường hợp width là list hoặc string lạ
         if isinstance(width_raw, list):
-            width_raw = width_raw[0]
+            width_raw = str(width_raw[0])
+        else:
+            width_raw = str(width_raw)
+        
+        # Regex tìm số float đầu tiên (VD: "5.5m", "5;6", "approx 5")
         try:
-            return float(re.findall(r"[-+]?\d*\.\d+|\d+", str(width_raw))[0])
+            nums = re.findall(r"[-+]?\d*\.\d+|\d+", width_raw)
+            if nums:
+                final_width = float(nums[0])
         except Exception:
             pass
 
-    highway_type = edge_data.get('highway', 'residential')
-    if isinstance(highway_type, list):
-        highway_type = highway_type[0]
-    
-    width_mapping = {
-        'motorway': 20, 'trunk': 15, 'primary': 12, 'secondary': 10, 'tertiary': 8,
-        'residential': 5, 'unclassified': 5,
-        'service': 3.5, 'living_street': 3.5,
-        'footway': 2, 'path': 2, 'cycleway': 2, 'pedestrian': 2
-    }
-    return width_mapping.get(highway_type, 4.0) 
+    # Nếu không parse được, dùng highway type
+    if final_width is None:
+        highway_type = edge_data.get('highway', 'residential')
+        if isinstance(highway_type, list):
+            highway_type = highway_type[0]
+        
+        width_mapping = {
+            'motorway': 15.0, 'trunk': 12.0, 'primary': 10.0, 'secondary': 8.0, 
+            'tertiary': 7.0, 'residential': 5.0, 'unclassified': 5.0,
+            'service': 4.0, 'living_street': 4.0, 'footway': 2.5, 
+            'path': 2.0, 'cycleway': 2.0, 'pedestrian': 2.0
+        }
+        final_width = width_mapping.get(highway_type, 4.0)
 
+    # CHỐT CHẶN: Giới hạn width tối đa là 20m thôi (để dễ ngập hơn)
+    if final_width > 20:
+        final_width = 20.0
+        
+    return final_width
+
+# --- CẢI TIẾN LOGIC TRẠNG THÁI NGẬP ---
 def get_flood_status(edge_data):
-    if GLOBAL_RAINFALL <= 0:
+    # 1. Mưa nhỏ hoặc không mưa -> Không ngập
+    if GLOBAL_RAINFALL <= 10: 
         return False, 0
     
+    # 2. Mưa rất to (> 1000mm) -> Ngập toàn bộ (Noah's Ark mode)
+    if GLOBAL_RAINFALL > 1000:
+        return True, float('inf')
+    
     width = get_road_width(edge_data)
-    capacity = width * 25 
+    
+    # Công thức: Sức chịu đựng = width * 15 (Giảm hệ số để đường dễ ngập hơn)
+    capacity = width * 15.0 
     
     if GLOBAL_RAINFALL > capacity:
         return True, float('inf')
     
     return False, 0
+# --- CẢI TIẾN LOGIC NGẬP ---
 
 # ==========================================
 # GEOMETRY & A*
@@ -151,29 +180,26 @@ def a_star(graph, start, goal):
             continue
 
         for neighbor in graph.neighbors(current):
-            # Lấy cạnh ngắn nhất giữa current -> neighbor
+            # Lấy cạnh tốt nhất giữa 2 node
             edge_key, edge_data = min(
                 graph[current][neighbor].items(),
                 key=lambda kv: kv[1].get('length', float('inf'))
             )
             length = float(edge_data.get('length', 1))
-            
-            # Hệ số tắc đường (1.0 nếu không bị tắc)
             traffic_factor = float(edge_data.get('traffic_factor', 1.0))
 
+            # 1. CHECK ĐƯỜNG CẤM (CHẶN TUYỆT ĐỐI)
             node_lat = graph.nodes[neighbor]['y']
             node_lng = graph.nodes[neighbor]['x']
-
-            # 1. CHECK ĐƯỜNG CẤM (CHẶN)
             if is_node_forbidden(node_lat, node_lng):
                 continue 
             
-            # 2. CHECK NGẬP LỤT (CHẶN)
+            # 2. CHECK NGẬP LỤT (CHẶN TUYỆT ĐỐI - NHƯ BẠN YÊU CẦU)
             is_flooded, _ = get_flood_status(edge_data)
             if is_flooded:
-                continue
+                continue # <--- Dòng quan trọng: Gặp ngập là bỏ qua luôn, không xét nữa.
 
-            # 3. Chi phí = độ dài * hệ số tắc
+            # Tính chi phí bình thường
             new_cost = cost_so_far[current] + length * traffic_factor
             
             if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
@@ -183,7 +209,7 @@ def a_star(graph, start, goal):
                 came_from[neighbor] = current
 
     if goal not in came_from:
-        return None
+        return None # Trả về None nếu không tìm được đường (do bị ngập hết lối đi)
 
     path = []
     curr = goal
@@ -192,7 +218,6 @@ def a_star(graph, start, goal):
         curr = came_from[curr]
     path.reverse()
     return path
-
 def add_temp_node(graph, lat, lng, edge):
     u, v, key = edge
     temp_id = f"temp_{lat}_{lng}"
@@ -257,34 +282,27 @@ def find_path():
 
         G_temp = G.copy()
         
-        # Geometry processing như cũ
-        geom_start = parse_linestring(G[u1][v1][k1].get('geometry', '')) if k1 in G[u1][v1] else [
-            (G.nodes[u1]['y'], G.nodes[u1]['x']),
-            (G.nodes[v1]['y'], G.nodes[v1]['x'])
-        ]
-        geom_end = parse_linestring(G[u2][v2][k2].get('geometry', '')) if k2 in G[u2][v2] else [
-            (G.nodes[u2]['y'], G.nodes[u2]['x']),
-            (G.nodes[v2]['y'], G.nodes[v2]['x'])
-        ]
-
+        # ... (Giữ nguyên phần xử lý geometry/project point cũ) ...
+        geom_start = parse_linestring(G[u1][v1][k1].get('geometry', '')) if k1 in G[u1][v1] else [(G.nodes[u1]['y'], G.nodes[u1]['x']), (G.nodes[v1]['y'], G.nodes[v1]['x'])]
+        geom_end = parse_linestring(G[u2][v2][k2].get('geometry', '')) if k2 in G[u2][v2] else [(G.nodes[u2]['y'], G.nodes[u2]['x']), (G.nodes[v2]['y'], G.nodes[v2]['x'])]
         proj_start = project_point_to_edge((start['lat'], start['lng']), geom_start) or (start['lat'], start['lng'])
         proj_end = project_point_to_edge((end['lat'], end['lng']), geom_end) or (end['lat'], end['lng'])
-
         temp_start_id = add_temp_node(G_temp, proj_start[0], proj_start[1], (u1, v1, k1))
         temp_end_id = add_temp_node(G_temp, proj_end[0], proj_end[1], (u2, v2, k2))
-        
+        # ... (Kết thúc phần giữ nguyên) ...
+
         path_nodes = a_star(G_temp, temp_start_id, temp_end_id)
         
         if path_nodes:
             path_coords = [(G_temp.nodes[n]["y"], G_temp.nodes[n]["x"]) for n in path_nodes if G_temp.has_node(n)]
             return jsonify({"status": "success", "path": path_coords})
         
-        return jsonify({"status": "error", "message": "Đường bị chặn do Ngập lụt hoặc Cấm đường! Hãy thử chờ nước rút."}), 404
+        # Thông báo lỗi rõ ràng khi bị chặn
+        return jsonify({"status": "error", "message": "Đường bị chặn do NGẬP LỤT hoặc CẤM! Hãy chờ nước rút."}), 404
         
     except Exception as e:
         print(e)
         return jsonify({"status": "error", "message": str(e)}), 500
-
 @app.route('/api/all-nodes', methods=['GET'])
 def get_all_nodes():
     nodes = []
@@ -361,21 +379,40 @@ def set_rain():
     return jsonify({"status": "success", "message": f"Mưa: {GLOBAL_RAINFALL}mm"})
 
 @app.route('/api/safe-roads', methods=['GET'])
+@app.route('/api/safe-roads', methods=['GET'])
 def get_safe_roads():
+    """
+    Trả về:
+      - safe_roads: các đoạn KHÔNG ngập
+      - flooded_roads: các đoạn BỊ ngập
+    => Frontend vẽ 2 màu khác nhau, nhìn đầy đủ mạng lưới.
+    """
     safe_segments = []
+    flooded_segments = []
+
     for u, v, k, data in G.edges(keys=True, data=True):
         is_flooded, _ = get_flood_status(data)
-        if not is_flooded:
-            if 'geometry' in data:
-                coords = parse_linestring(data['geometry'])
-                if coords:
-                    safe_segments.append(coords)
-            else:
-                p1 = (G.nodes[u]['y'], G.nodes[u]['x'])
-                p2 = (G.nodes[v]['y'], G.nodes[v]['x'])
-                safe_segments.append([p1, p2])
-    return jsonify({"status": "success", "roads": safe_segments})
 
+        # Lấy toạ độ đoạn đường
+        if 'geometry' in data:
+            coords = parse_linestring(data['geometry'])
+            if not coords:
+                continue
+        else:
+            p1 = (G.nodes[u]['y'], G.nodes[u]['x'])
+            p2 = (G.nodes[v]['y'], G.nodes[v]['x'])
+            coords = [p1, p2]
+
+        if is_flooded:
+            flooded_segments.append(coords)
+        else:
+            safe_segments.append(coords)
+
+    return jsonify({
+        "status": "success",
+        "safe_roads": safe_segments,
+        "flooded_roads": flooded_segments
+    })
 @app.route('/api/add-forbidden', methods=['POST'])
 def add_forbidden():
     """
